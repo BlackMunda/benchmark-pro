@@ -1,0 +1,29 @@
+# BenchmarkPro query spec (version 1)
+version: 1
+
+database:
+  engine: sqlite            # sqlite | postgres  (override with --engine)
+  dsn: benchmark.db         # override with --dsn or $BENCH_DSN
+  schema: db/schema.sql     # path relative to this file
+
+benchmarks:
+  - name: user_lookup_by_email
+    sql: "SELECT * FROM users WHERE email = %s"
+    params: ["user500@example.com"]
+    runs: 10
+
+  - name: logs_for_user
+    sql: "SELECT COUNT(*) FROM logs WHERE user_id = %s"
+    params: [42]
+    runs: 10
+
+  - name: batch_delete_logs
+    sql: "DELETE FROM logs WHERE created_at < %s"
+    params: ["2024-01-01"]
+    runs: 10
+    rollback: true          # default: every run is rolled back, data is never changed
+
+  - name: create_user
+    sql: "INSERT INTO users (id, email, name, created_at) VALUES (%s, %s, %s, %s)"
+    params: [999999, "new@example.com", "New User", "2025-01-01 00:00:00"]
+    runs: 10
