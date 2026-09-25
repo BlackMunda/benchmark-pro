@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: bench
+      POSTGRES_PASSWORD: bench
+      POSTGRES_DB: bench
+    ports:
+      - "5433:5432"   # 5433 so it doesn't clash with a local Postgres
+    # Fixed resources keep timings comparable between runs.
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1g
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bench"]
+      interval: 3s
+      retries: 10
