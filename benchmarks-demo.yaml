@@ -1,0 +1,24 @@
+# Demo spec: simulates a PR that makes logs_for_user much slower
+# (a cross join instead of the indexed-count query), to show baseline
+# comparison flagging a REGRESSION. Everything else is unchanged.
+version: 1
+
+database:
+  engine: sqlite
+  dsn: benchmark.db
+  schema: db/schema.sql
+
+benchmarks:
+  - name: user_lookup_by_email
+    sql: "SELECT * FROM users WHERE email = %s"
+    params: ["user500@example.com"]
+    runs: 10
+
+  - name: logs_for_user
+    sql: "SELECT COUNT(*) FROM logs a, logs b"
+    runs: 10
+
+  - name: create_user
+    sql: "INSERT INTO users (id, email, name, created_at) VALUES (%s, %s, %s, %s)"
+    params: [999999, "new@example.com", "New User", "2025-01-01 00:00:00"]
+    runs: 10

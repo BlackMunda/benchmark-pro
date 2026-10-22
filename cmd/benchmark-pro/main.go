@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"benchmarkpro/internal/compare"
 	"benchmarkpro/internal/dbadapter"
 	"benchmarkpro/internal/report"
 	"benchmarkpro/internal/runner"
@@ -13,11 +14,14 @@ import (
 )
 
 type config struct {
-	specPath string
-	engine   string
-	dsn      string
-	out      string
-	initDB   bool
+	specPath         string
+	engine           string
+	dsn              string
+	out              string
+	initDB           bool
+	baselinePath     string
+	thresholdPct     float64
+	failOnRegression bool
 }
 
 func flagSet(c *config, withRunFlags bool) *flag.FlagSet {
@@ -28,6 +32,9 @@ func flagSet(c *config, withRunFlags bool) *flag.FlagSet {
 	if withRunFlags {
 		fs.StringVar(&c.out, "out", "", "write JSON report to this path")
 		fs.BoolVar(&c.initDB, "init", false, "reset + seed the database first")
+		fs.StringVar(&c.baselinePath, "baseline", "", "compare against this baseline results JSON")
+		fs.Float64Var(&c.thresholdPct, "threshold", compare.DefaultThresholdPct, "regression threshold in percent")
+		fs.BoolVar(&c.failOnRegression, "fail-on-regression", false, "exit with code 3 if any query regresses")
 	}
 	return fs
 }
@@ -133,6 +140,20 @@ func run(c config) int {
 	for _, b := range rep.Benchmarks {
 		if b.Error != "" {
 			return 1
+		}
+	}
+
+	if c.baselinePath != "" {
+		base, err := compare.LoadBaseline(c.baselinePath)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error: %v\n", err)
+			return 2
+		}
+		cmp := compare.Compare(base, rep, c.thresholdPct)
+		fmt.Println()
+		fmt.Println(compare.FormatTable(cmp))
+		if c.failOnRegression && cmp.HasRegressions() {
+			return 3
 		}
 	}
 	return 0

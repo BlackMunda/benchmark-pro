@@ -1,3 +1,4 @@
 *.db
 results.json
+baseline.json
 /benchmark-pro
