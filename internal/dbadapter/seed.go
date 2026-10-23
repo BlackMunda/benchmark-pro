@@ -1,21 +1,23 @@
 package dbadapter
 
-import (
-	"fmt"
-	"time"
-)
+import "benchmarkpro/internal/sampledata"
 
-var seedBase = time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
-
-// Seed inserts deterministic rows (weeks 5-6 replace this with the real test
-// data generator). The same inputs always produce identical rows.
+// Seed inserts deterministic, realistic test data (weeks 5-6's generator —
+// see internal/sampledata). Kept as a thin wrapper so callers that only care
+// about "give me N users and M logs" don't need to know about sampledata.Config.
 func (a *Adapter) Seed(users, logs int) error {
-	userRows := make([][]any, users)
-	for i := 1; i <= users; i++ {
-		userRows[i-1] = []any{
-			i, fmt.Sprintf("user%d@example.com", i), fmt.Sprintf("User %d", i),
-			seedBase.Add(time.Duration(i) * time.Hour).Format("2006-01-02 15:04:05"),
-		}
+	return a.SeedWith(sampledata.Config{Users: users, Logs: logs, Seed: sampledata.DefaultConfig().Seed})
+}
+
+// SeedWith generates data with sampledata.Generate and inserts it. Exposed
+// separately from Seed so callers can override the random seed (e.g. the CLI's
+// --seed flag) without changing Seed's simple two-int signature.
+func (a *Adapter) SeedWith(cfg sampledata.Config) error {
+	users, logs := sampledata.Generate(cfg)
+
+	userRows := make([][]any, len(users))
+	for i, u := range users {
+		userRows[i] = []any{u.ID, u.Email, u.Name, u.CreatedAt}
 	}
 	if err := a.ExecuteMany(
 		"INSERT INTO users (id, email, name, created_at) VALUES (%s, %s, %s, %s)", userRows,
@@ -23,12 +25,9 @@ func (a *Adapter) Seed(users, logs int) error {
 		return err
 	}
 
-	logRows := make([][]any, logs)
-	for i := 1; i <= logs; i++ {
-		logRows[i-1] = []any{
-			i, (i % users) + 1, fmt.Sprintf("event %d", i),
-			seedBase.Add(time.Duration(i*4) * time.Hour).Format("2006-01-02 15:04:05"),
-		}
+	logRows := make([][]any, len(logs))
+	for i, l := range logs {
+		logRows[i] = []any{l.ID, l.UserID, l.Message, l.CreatedAt}
 	}
 	return a.ExecuteMany(
 		"INSERT INTO logs (id, user_id, message, created_at) VALUES (%s, %s, %s, %s)", logRows,
