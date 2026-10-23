@@ -10,6 +10,7 @@ import (
 	"benchmarkpro/internal/report"
 	"benchmarkpro/internal/runner"
 	"benchmarkpro/internal/spec"
+	"benchmarkpro/internal/sampledata"
 )
 
 type config struct {
@@ -18,13 +19,20 @@ type config struct {
 	dsn      string
 	out      string
 	initDB   bool
+	users    int
+	logs     int
+	seed     int64
 }
 
 func flagSet(c *config, withRunFlags bool) *flag.FlagSet {
+	def := sampledata.DefaultConfig()
 	fs := flag.NewFlagSet("benchmark-pro", flag.ContinueOnError)
 	fs.StringVar(&c.specPath, "spec", "benchmarks.yaml", "path to spec YAML")
 	fs.StringVar(&c.engine, "engine", "", "override spec engine (sqlite|postgres)")
 	fs.StringVar(&c.dsn, "dsn", "", "database DSN (or $BENCH_DSN)")
+	fs.IntVar(&c.users, "users", def.Users, "number of users to seed")
+	fs.IntVar(&c.logs, "logs", def.Logs, "number of logs to seed")
+	fs.Int64Var(&c.seed, "seed", def.Seed, "random seed for seed data (same seed = same data)")
 	if withRunFlags {
 		fs.StringVar(&c.out, "out", "", "write JSON report to this path")
 		fs.BoolVar(&c.initDB, "init", false, "reset + seed the database first")
@@ -80,7 +88,7 @@ func connect(c config, sp *spec.Spec) (string, *dbadapter.Adapter, error) {
 	return engine, a, err
 }
 
-func initDB(a *dbadapter.Adapter, sp *spec.Spec) error {
+func initDB(a *dbadapter.Adapter, sp *spec.Spec, c config) error {
 	if sp.Database.Schema == "" {
 		return fmt.Errorf("database.schema is required to initialise the database")
 	}
@@ -91,7 +99,7 @@ func initDB(a *dbadapter.Adapter, sp *spec.Spec) error {
 	if err := a.ExecuteScript(string(script)); err != nil {
 		return err
 	}
-	return a.Seed(1000, 5000)
+	return a.SeedWith(sampledata.Config{Users: c.users, Logs: c.logs, Seed: c.seed})
 }
 
 func run(c config) int {
@@ -108,7 +116,7 @@ func run(c config) int {
 	defer a.Close()
 
 	if c.initDB {
-		if err := initDB(a, sp); err != nil {
+		if err := initDB(a, sp, c); err != nil {
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			return 2
 		}
@@ -150,11 +158,11 @@ func runInitDB(c config) int {
 		return 2
 	}
 	defer a.Close()
-	if err := initDB(a, sp); err != nil {
+	if err := initDB(a, sp, c); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return 2
 	}
-	fmt.Println("Database reset and seeded (1000 users, 5000 logs).")
+	fmt.Printf("Database reset and seeded (%d users, %d logs, seed %d).\n", c.users, c.logs, c.seed)
 	return 0
 }
 
